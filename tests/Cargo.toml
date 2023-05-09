@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 ckb-testtool = "0.9"
+blake2b-rs = "0.2"

@@ -1,26 +1,26 @@
 // Import from `core` instead of from `std` since we are in no-std mode
-use core::{result::Result, ops::Deref};
-
-// Import heap related library from `alloc`
-// https://doc.rust-lang.org/alloc/index.html
-use alloc::{vec, vec::Vec};
+use core::{ops::Deref, result::Result};
 
 // Import CKB syscalls and structures
 // https://docs.rs/ckb-std/
 use ckb_std::{
-    debug,
+    ckb_constants::Source,
+    ckb_types::prelude::*,
+    high_level::{
+        load_cell_data, load_cell_lock, load_cell_type_hash, load_input, load_script,
+        load_script_hash,
+    },
     syscalls::{self, SysError},
-    high_level::{load_script, load_input, load_script_hash, load_cell_type_hash, load_cell_lock, load_cell_data},
-    ckb_types::prelude::*, ckb_constants::Source,
 };
 
 use crate::error::Error;
 
 pub fn main() -> Result<(), Error> {
     if is_init() {
-        validate_init_hash()?;
+        validate_init_hash()
+    } else {
+        validate_linked_list()
     }
-    validate_linked_list()
 }
 
 // check if we are initializing the global registry
@@ -29,8 +29,8 @@ fn is_init() -> bool {
     // load cell to a zero-length buffer must be failed, we are using this tricky way to check if input group is empty, which means we are initializing the global registry
     match syscalls::load_cell(&mut buf, 0, 0, Source::GroupInput).unwrap_err() {
         SysError::LengthNotEnough(_) => false,
-        SysError::ItemMissing => true,
-        _ => unreachable!(),
+        SysError::IndexOutOfBound => true,
+        _ => unreachable!("is_init"),
     }
 }
 
@@ -76,7 +76,8 @@ fn validate_linked_list() -> Result<(), Error> {
                     if script.args().len() < 32 {
                         return Err(Error::InvalidArgsLength);
                     }
-                    let output_start: [u8; 32] = script.args().raw_data()[0..32].try_into().unwrap();
+                    let output_start: [u8; 32] =
+                        script.args().raw_data()[0..32].try_into().unwrap();
                     if output_start != input_start {
                         return Err(Error::InvalidLinkedList);
                     }
@@ -94,7 +95,7 @@ fn validate_linked_list() -> Result<(), Error> {
                         break;
                     }
                 }
-                Err(_) => {
+                Err(e) => {
                     return Err(Error::InvalidLinkedList);
                 }
             }
@@ -104,7 +105,7 @@ fn validate_linked_list() -> Result<(), Error> {
 
     // check if all the outputs are visited
     match load_cell_lock(o, Source::GroupOutput) {
-        Err(SysError::ItemMissing) => Ok(()),
+        Err(SysError::IndexOutOfBound) => Ok(()),
         _ => Err(Error::InvalidLinkedList),
     }
 }
@@ -115,7 +116,7 @@ fn load_first_output_index() -> Result<usize, Error> {
     let mut i = 0;
     while let Some(type_hash) = load_cell_type_hash(i, Source::Output)? {
         if type_hash == current_script_hash {
-            return Ok(i)
+            return Ok(i);
         }
         i += 1
     }
