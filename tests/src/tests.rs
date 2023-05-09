@@ -1,23 +1,9 @@
 use super::*;
 use ckb_testtool::builtin::ALWAYS_SUCCESS;
-use ckb_testtool::ckb_error::Error;
 use ckb_testtool::ckb_types::{bytes::Bytes, core::TransactionBuilder, packed::*, prelude::*};
 use ckb_testtool::context::{random_hash, Context};
 
 const MAX_CYCLES: u64 = 10_000_000;
-
-// error numbers
-const ERROR_EMPTY_ARGS: i8 = 5;
-
-fn assert_script_error(err: Error, err_code: i8) {
-    let error_string = err.to_string();
-    assert!(
-        error_string.contains(format!("error code {} ", err_code).as_str()),
-        "error_string: {}, expected_error_code: {}",
-        error_string,
-        err_code
-    );
-}
 
 #[test]
 fn test_init_global_registry() {
@@ -164,6 +150,173 @@ fn test_update_global_registry() {
 
     // build transaction
     let tx = TransactionBuilder::default()
+        .input(input)
+        .outputs(outputs)
+        .outputs_data(outputs_data.pack())
+        .build();
+    let tx = context.complete_tx(tx);
+
+    // run
+    let cycles = context
+        .verify_tx(&tx, MAX_CYCLES)
+        .expect("pass verification");
+    println!("consume cycles: {}", cycles);
+}
+
+#[test]
+fn test_lock_wrapper_load_without_config() {
+    // deploy contract
+    let mut context = Context::default();
+    let gr_out_point = {
+        let contract_bin: Bytes = Loader::default().load_binary("global-registry");
+        context.deploy_cell(contract_bin)
+    };
+    let lw_out_point = {
+        let contract_bin: Bytes = Loader::default().load_binary("lock-wrapper");
+        context.deploy_cell(contract_bin)
+    };
+
+    // prepare lock script and type script
+    let gr_type_script = context
+        .build_script(&gr_out_point, random_hash().as_bytes())
+        .expect("script");
+    let gr_type_script_hash: [u8; 32] = gr_type_script
+        .calc_script_hash()
+        .as_slice()
+        .try_into()
+        .unwrap();
+
+    let lock_script_1 = context
+        .build_script(
+            &lw_out_point,
+            Bytes::from([gr_type_script_hash, [1u8; 32]].concat()),
+        )
+        .expect("script");
+
+    let lock_script_2 = context
+        .build_script(
+            &lw_out_point,
+            Bytes::from([gr_type_script_hash, [2u8; 32]].concat()),
+        )
+        .expect("script");
+
+    let type_script = ScriptOpt::new_builder().set(Some(gr_type_script)).build();
+
+    // prepare cell deps
+    let cell_dep_out_point = context.create_cell(
+        CellOutput::new_builder()
+            .capacity(1000u64.pack())
+            .lock(lock_script_1.clone())
+            .type_(type_script.clone())
+            .build(),
+        Bytes::from([[255u8; 32], [0u8; 32]].concat()),
+    );
+
+    let cell_dep = CellDep::new_builder().out_point(cell_dep_out_point).build();
+
+    // prepare inputs
+    let input_out_point = context.create_cell(
+        CellOutput::new_builder()
+            .capacity(3000u64.pack())
+            .lock(lock_script_2.clone())
+            .build(),
+        Bytes::new(),
+    );
+    let input = CellInput::new_builder()
+        .previous_output(input_out_point)
+        .build();
+
+    // prepare outputs
+    let outputs = vec![CellOutput::new_builder()
+        .capacity(3000u64.pack())
+        .lock(lock_script_2.clone())
+        .build()];
+
+    let outputs_data = vec![Bytes::new()];
+
+    // build transaction
+    let tx = TransactionBuilder::default()
+        .cell_dep(cell_dep)
+        .input(input)
+        .outputs(outputs)
+        .outputs_data(outputs_data.pack())
+        .build();
+    let tx = context.complete_tx(tx);
+
+    // run
+    let cycles = context
+        .verify_tx(&tx, MAX_CYCLES)
+        .expect("pass verification");
+    println!("consume cycles: {}", cycles);
+}
+
+#[test]
+fn test_lock_wrapper_load_with_config() {
+    // deploy contract
+    let mut context = Context::default();
+    let gr_out_point = {
+        let contract_bin: Bytes = Loader::default().load_binary("global-registry");
+        context.deploy_cell(contract_bin)
+    };
+    let lw_out_point = {
+        let contract_bin: Bytes = Loader::default().load_binary("lock-wrapper");
+        context.deploy_cell(contract_bin)
+    };
+
+    // prepare lock script and type script
+    let gr_type_script = context
+        .build_script(&gr_out_point, random_hash().as_bytes())
+        .expect("script");
+    let gr_type_script_hash: [u8; 32] = gr_type_script
+        .calc_script_hash()
+        .as_slice()
+        .try_into()
+        .unwrap();
+
+    let lock_script_1 = context
+        .build_script(
+            &lw_out_point,
+            Bytes::from([gr_type_script_hash, [1u8; 32]].concat()),
+        )
+        .expect("script");
+
+    let type_script = ScriptOpt::new_builder().set(Some(gr_type_script)).build();
+
+    // prepare cell deps
+    let cell_dep_out_point = context.create_cell(
+        CellOutput::new_builder()
+            .capacity(1000u64.pack())
+            .lock(lock_script_1.clone())
+            .type_(type_script.clone())
+            .build(),
+        Bytes::from([[255u8; 32], [3u8; 32]].concat()),
+    );
+
+    let cell_dep = CellDep::new_builder().out_point(cell_dep_out_point).build();
+
+    // prepare inputs
+    let input_out_point = context.create_cell(
+        CellOutput::new_builder()
+            .capacity(3000u64.pack())
+            .lock(lock_script_1.clone())
+            .build(),
+        Bytes::new(),
+    );
+    let input = CellInput::new_builder()
+        .previous_output(input_out_point)
+        .build();
+
+    // prepare outputs
+    let outputs = vec![CellOutput::new_builder()
+        .capacity(3000u64.pack())
+        .lock(lock_script_1.clone())
+        .build()];
+
+    let outputs_data = vec![Bytes::new()];
+
+    // build transaction
+    let tx = TransactionBuilder::default()
+        .cell_dep(cell_dep)
         .input(input)
         .outputs(outputs)
         .outputs_data(outputs_data.pack())

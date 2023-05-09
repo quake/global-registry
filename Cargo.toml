@@ -1,5 +1,5 @@
 [workspace]
-members = ["contracts/global-registry", "tests"]
+members = ["contracts/global-registry", "contracts/lock-wrapper", "tests"]
 
 [profile.release]
 overflow-checks = true

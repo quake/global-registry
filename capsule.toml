@@ -11,3 +11,7 @@ deployment = "deployment.toml"
 [[contracts]]
 name = "global-registry"
 template_type = "Rust"
+
+[[contracts]]
+name = "lock-wrapper"
+template_type = "Rust"

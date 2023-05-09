@@ -95,7 +95,7 @@ fn validate_linked_list() -> Result<(), Error> {
                         break;
                     }
                 }
-                Err(e) => {
+                Err(_) => {
                     return Err(Error::InvalidLinkedList);
                 }
             }
