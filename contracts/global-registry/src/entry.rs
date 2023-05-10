@@ -56,9 +56,9 @@ fn validate_init_hash() -> Result<(), Error> {
 
 // check if the linked list is valid
 fn validate_linked_list() -> Result<(), Error> {
-    let mut i = 0;
     let mut o = 0;
-    while let Ok(script) = load_cell_lock(i, Source::GroupInput) {
+    let inputs_lock_iter = QueryIter::new(load_cell_lock, Source::GroupInput);
+    for (i, script) in inputs_lock_iter.enumerate() {
         if script.args().len() < 32 {
             return Err(Error::InvalidArgsLength);
         }
@@ -87,6 +87,9 @@ fn validate_linked_list() -> Result<(), Error> {
                         return Err(Error::InvalidDataLength);
                     }
                     let output_end: [u8; 32] = data[0..32].try_into().unwrap();
+                    if output_end <= output_start {
+                        return Err(Error::InvalidLinkedList);
+                    }
 
                     o += 1;
                     if output_end != input_end {
@@ -100,7 +103,6 @@ fn validate_linked_list() -> Result<(), Error> {
                 }
             }
         }
-        i += 1;
     }
 
     // check if all the outputs are visited
