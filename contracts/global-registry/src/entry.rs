@@ -8,7 +8,7 @@ use ckb_std::{
     ckb_types::prelude::*,
     high_level::{
         load_cell_data, load_cell_lock, load_cell_type_hash, load_input, load_script,
-        load_script_hash,
+        load_script_hash, QueryIter,
     },
     syscalls::{self, SysError},
 };
@@ -112,13 +112,13 @@ fn validate_linked_list() -> Result<(), Error> {
 
 fn load_first_output_index() -> Result<usize, Error> {
     let current_script_hash = load_script_hash()?;
-
-    let mut i = 0;
-    while let Some(type_hash) = load_cell_type_hash(i, Source::Output)? {
-        if type_hash == current_script_hash {
+    let iter = QueryIter::new(load_cell_type_hash, Source::Output);
+    for (i, type_hash) in iter.enumerate() {
+        if type_hash == Some(current_script_hash) {
             return Ok(i);
         }
-        i += 1
     }
+    // should never reach here because we have checked if the input group is empty (fn is_init)
+    // which means there must be at least one output with the current type script
     unreachable!()
 }
