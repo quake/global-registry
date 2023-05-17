@@ -14,6 +14,8 @@ pub enum Error {
     InvalidCellDepRef,
     InvalidInputCount,
     InvalidOutputLockScript,
+    InvalidWitnessFormat,
+    InvalidWrappedScriptHash,
 }
 
 impl From<SysError> for Error {

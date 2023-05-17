@@ -9,10 +9,14 @@ use alloc::vec::Vec;
 // https://docs.rs/ckb-std/
 use ckb_std::{
     ckb_constants::Source,
-    ckb_types::{packed::Script, prelude::*},
-    debug,
+    ckb_types::{
+        core::ScriptHashType,
+        packed::{Script, ScriptReader},
+        prelude::*,
+    },
     high_level::{
-        load_cell, load_cell_data, load_cell_lock, load_cell_type_hash, load_script, QueryIter,
+        exec_cell_with_args, load_cell, load_cell_data, load_cell_lock, load_cell_type_hash,
+        load_script, load_witness, QueryIter,
     },
 };
 
@@ -44,7 +48,8 @@ fn is_delegate_to_wrapped(current_script: &Script) -> bool {
 fn exec_wrapped_script(current_script: &Script) -> Result<(), Error> {
     let global_registry_script_hash: [u8; 32] =
         current_script.args().raw_data()[0..32].try_into().unwrap();
-    let args_key: [u8; 32] = current_script.args().raw_data()[32..64].try_into().unwrap();
+    let wrapped_script_hash: [u8; 32] =
+        current_script.args().raw_data()[32..64].try_into().unwrap();
 
     let cell_dep_type_hash = load_cell_type_hash(0, Source::CellDep)?;
     if cell_dep_type_hash
@@ -67,15 +72,15 @@ fn exec_wrapped_script(current_script: &Script) -> Result<(), Error> {
         let start: [u8; 32] = cell_dep_lock_script.args().raw_data()[32..64]
             .try_into()
             .unwrap();
-        match start.cmp(&args_key) {
+        match start.cmp(&wrapped_script_hash) {
             Ordering::Equal => {
-                let args_value: [u8; 32] = data[32..64].try_into().unwrap();
-                exec_wrapped_script_inner(args_value)
+                let config_wrapped_script_hash: [u8; 32] = data[32..64].try_into().unwrap();
+                exec_wrapped_script_inner(config_wrapped_script_hash)
             }
             Ordering::Less => {
                 let end: [u8; 32] = data[0..32].try_into().unwrap();
-                if end >= args_key {
-                    exec_wrapped_script_inner(args_key)
+                if end >= wrapped_script_hash {
+                    exec_wrapped_script_inner(wrapped_script_hash)
                 } else {
                     return Err(Error::InvalidCellDepRef);
                 }
@@ -130,9 +135,46 @@ fn validate_config_value(current_script: &Script) -> Result<(), Error> {
     }
 }
 
-fn exec_wrapped_script_inner(args: [u8; 32]) -> Result<(), Error> {
-    // in this example, we just print the args
-    // TODO: use syscall::exec or spawn to run wrapped script
-    debug!("exec_wrapped_script_inner: {:?}", args);
+fn exec_wrapped_script_inner(wrapped_script_hash: [u8; 32]) -> Result<(), Error> {
+    let witness = load_witness(0, Source::GroupInput)?;
+    let (script, _witness_index) = parse_witness(&witness)?;
+    let script_hash = calc_script_hash(&script);
+    if script_hash != wrapped_script_hash {
+        return Err(Error::InvalidWrappedScriptHash);
+    }
+
+    let hash_type = if script.hash_type().as_slice() == &[1] {
+        ScriptHashType::Type
+    } else {
+        ScriptHashType::Data
+    };
+
+    exec_cell_with_args(script.code_hash().as_slice(), hash_type, 0, 0, &witness)?;
     Ok(())
+}
+
+fn parse_witness(witness: &[u8]) -> Result<(Script, u16), Error> {
+    // 2 (witness_index) + 53 (min script size)
+    if witness.len() < 55 {
+        return Err(Error::InvalidWitnessFormat);
+    }
+    let wrapped_script_witness_index = u16::from_le_bytes(witness[0..2].try_into().unwrap());
+    let wrapped_script_data = witness[2..].to_vec();
+    match ScriptReader::verify(&wrapped_script_data, false) {
+        Ok(()) => {
+            let wrapped_script = Script::new_unchecked(wrapped_script_data.into());
+            Ok((wrapped_script, wrapped_script_witness_index))
+        }
+        Err(_err) => Err(Error::InvalidWitnessFormat),
+    }
+}
+
+fn calc_script_hash(script: &Script) -> [u8; 32] {
+    let mut hash = [0; 32];
+    let mut blake2b = blake2b_rs::Blake2bBuilder::new(32)
+        .personal(b"ckb-default-hash")
+        .build();
+    blake2b.update(script.as_slice());
+    blake2b.finalize(&mut hash);
+    hash
 }

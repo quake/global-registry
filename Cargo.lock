@@ -366,9 +366,8 @@ dependencies = [
 
 [[package]]
 name = "ckb-std"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8dbb4cafeca131457738f8428ef31a7729f7914b99b5c210554433f03eb2f936"
+version = "0.13.0"
+source = "git+https://github.com/quake/ckb-std?branch=develop#43b4283eb938114a0b5b1678d1cb1631eabad451"
 dependencies = [
  "buddy-alloc",
  "cc",
@@ -709,6 +708,7 @@ dependencies = [
 name = "lock-wrapper"
 version = "0.1.0"
 dependencies = [
+ "blake2b-rs",
  "ckb-std",
 ]
 

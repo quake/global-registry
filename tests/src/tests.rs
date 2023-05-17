@@ -171,12 +171,22 @@ fn test_lock_wrapper_load_without_config() {
         let contract_bin: Bytes = Loader::default().load_binary("global-registry");
         context.deploy_cell(contract_bin)
     };
+    let as_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
     let lw_out_point = {
         let contract_bin: Bytes = Loader::default().load_binary("lock-wrapper");
         context.deploy_cell(contract_bin)
     };
 
     // prepare lock script and type script
+    let wrapped_script = context
+        .build_script(&as_out_point, Bytes::from(vec![2u8; 32]))
+        .expect("script");
+    let wrapped_script_hash: [u8; 32] = wrapped_script
+        .calc_script_hash()
+        .as_slice()
+        .try_into()
+        .unwrap();
+
     let gr_type_script = context
         .build_script(&gr_out_point, random_hash().as_bytes())
         .expect("script");
@@ -189,14 +199,14 @@ fn test_lock_wrapper_load_without_config() {
     let lock_script_1 = context
         .build_script(
             &lw_out_point,
-            Bytes::from([gr_type_script_hash, [1u8; 32]].concat()),
+            Bytes::from([gr_type_script_hash, [0u8; 32]].concat()),
         )
         .expect("script");
 
     let lock_script_2 = context
         .build_script(
             &lw_out_point,
-            Bytes::from([gr_type_script_hash, [2u8; 32]].concat()),
+            Bytes::from([gr_type_script_hash, wrapped_script_hash].concat()),
         )
         .expect("script");
 
@@ -235,11 +245,23 @@ fn test_lock_wrapper_load_without_config() {
     let outputs_data = vec![Bytes::new()];
 
     // build transaction
+    let wrapped_script_witness_index = 1u16;
+    let wrapped_script_slice = wrapped_script.as_slice();
+    let witness = Bytes::from(
+        [
+            wrapped_script_witness_index.to_le_bytes().as_slice(),
+            wrapped_script_slice,
+        ]
+        .concat(),
+    );
+
     let tx = TransactionBuilder::default()
         .cell_dep(cell_dep)
+        .cell_dep(CellDep::new_builder().out_point(as_out_point).build())
         .input(input)
         .outputs(outputs)
         .outputs_data(outputs_data.pack())
+        .witness(witness.pack())
         .build();
     let tx = context.complete_tx(tx);
 
@@ -258,12 +280,21 @@ fn test_lock_wrapper_load_with_config() {
         let contract_bin: Bytes = Loader::default().load_binary("global-registry");
         context.deploy_cell(contract_bin)
     };
+    let as_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
     let lw_out_point = {
         let contract_bin: Bytes = Loader::default().load_binary("lock-wrapper");
         context.deploy_cell(contract_bin)
     };
 
     // prepare lock script and type script
+    let wrapped_script = context
+        .build_script(&as_out_point, Bytes::from(vec![3u8; 32]))
+        .expect("script");
+    let wrapped_script_hash: [u8; 32] = wrapped_script
+        .calc_script_hash()
+        .as_slice()
+        .try_into()
+        .unwrap();
     let gr_type_script = context
         .build_script(&gr_out_point, random_hash().as_bytes())
         .expect("script");
@@ -273,10 +304,10 @@ fn test_lock_wrapper_load_with_config() {
         .try_into()
         .unwrap();
 
-    let lock_script_1 = context
+    let lock_script = context
         .build_script(
             &lw_out_point,
-            Bytes::from([gr_type_script_hash, [1u8; 32]].concat()),
+            Bytes::from([gr_type_script_hash, wrapped_script_hash].concat()),
         )
         .expect("script");
 
@@ -286,10 +317,10 @@ fn test_lock_wrapper_load_with_config() {
     let cell_dep_out_point = context.create_cell(
         CellOutput::new_builder()
             .capacity(1000u64.pack())
-            .lock(lock_script_1.clone())
+            .lock(lock_script.clone())
             .type_(type_script.clone())
             .build(),
-        Bytes::from([[255u8; 32], [3u8; 32]].concat()),
+        Bytes::from([[255u8; 32], wrapped_script_hash].concat()),
     );
 
     let cell_dep = CellDep::new_builder().out_point(cell_dep_out_point).build();
@@ -298,7 +329,7 @@ fn test_lock_wrapper_load_with_config() {
     let input_out_point = context.create_cell(
         CellOutput::new_builder()
             .capacity(3000u64.pack())
-            .lock(lock_script_1.clone())
+            .lock(lock_script.clone())
             .build(),
         Bytes::new(),
     );
@@ -309,17 +340,29 @@ fn test_lock_wrapper_load_with_config() {
     // prepare outputs
     let outputs = vec![CellOutput::new_builder()
         .capacity(3000u64.pack())
-        .lock(lock_script_1.clone())
+        .lock(lock_script.clone())
         .build()];
 
     let outputs_data = vec![Bytes::new()];
 
     // build transaction
+    let wrapped_script_witness_index = 1u16;
+    let wrapped_script_slice = wrapped_script.as_slice();
+    let witness = Bytes::from(
+        [
+            wrapped_script_witness_index.to_le_bytes().as_slice(),
+            wrapped_script_slice,
+        ]
+        .concat(),
+    );
+
     let tx = TransactionBuilder::default()
         .cell_dep(cell_dep)
+        .cell_dep(CellDep::new_builder().out_point(as_out_point).build())
         .input(input)
         .outputs(outputs)
         .outputs_data(outputs_data.pack())
+        .witness(witness.pack())
         .build();
     let tx = context.complete_tx(tx);
 
