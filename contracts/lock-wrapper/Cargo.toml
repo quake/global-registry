@@ -6,5 +6,5 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ckb-std = { git = "https://github.com/quake/ckb-std", branch = "develop"}
+ckb-std = { git = "https://github.com/nervosnetwork/ckb-std", branch = "master"}
 blake2b-rs = "0.2"

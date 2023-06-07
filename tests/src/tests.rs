@@ -171,7 +171,10 @@ fn test_lock_wrapper_load_without_config() {
         let contract_bin: Bytes = Loader::default().load_binary("global-registry");
         context.deploy_cell(contract_bin)
     };
-    let as_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
+    let dsa_out_point = {
+        let contract_bin: Bytes = Loader::default().load_binary("demo-script-a");
+        context.deploy_cell(contract_bin)
+    };
     let lw_out_point = {
         let contract_bin: Bytes = Loader::default().load_binary("lock-wrapper");
         context.deploy_cell(contract_bin)
@@ -179,7 +182,7 @@ fn test_lock_wrapper_load_without_config() {
 
     // prepare lock script and type script
     let wrapped_script = context
-        .build_script(&as_out_point, Bytes::from(vec![2u8; 32]))
+        .build_script(&dsa_out_point, Bytes::from((0..32).collect::<Vec<_>>()))
         .expect("script");
     let wrapped_script_hash: [u8; 32] = wrapped_script
         .calc_script_hash()
@@ -254,14 +257,16 @@ fn test_lock_wrapper_load_without_config() {
         ]
         .concat(),
     );
+    let inner_witness = (0..32).collect::<Vec<_>>();
 
     let tx = TransactionBuilder::default()
         .cell_dep(cell_dep)
-        .cell_dep(CellDep::new_builder().out_point(as_out_point).build())
+        .cell_dep(CellDep::new_builder().out_point(dsa_out_point).build())
         .input(input)
         .outputs(outputs)
         .outputs_data(outputs_data.pack())
         .witness(witness.pack())
+        .witness(inner_witness.pack())
         .build();
     let tx = context.complete_tx(tx);
 
@@ -280,7 +285,10 @@ fn test_lock_wrapper_load_with_config() {
         let contract_bin: Bytes = Loader::default().load_binary("global-registry");
         context.deploy_cell(contract_bin)
     };
-    let as_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
+    let dsb_out_point = {
+        let contract_bin: Bytes = Loader::default().load_binary("demo-script-b");
+        context.deploy_cell(contract_bin)
+    };
     let lw_out_point = {
         let contract_bin: Bytes = Loader::default().load_binary("lock-wrapper");
         context.deploy_cell(contract_bin)
@@ -288,7 +296,7 @@ fn test_lock_wrapper_load_with_config() {
 
     // prepare lock script and type script
     let wrapped_script = context
-        .build_script(&as_out_point, Bytes::from(vec![3u8; 32]))
+        .build_script(&dsb_out_point, Bytes::from((0..32).collect::<Vec<_>>()))
         .expect("script");
     let wrapped_script_hash: [u8; 32] = wrapped_script
         .calc_script_hash()
@@ -355,14 +363,16 @@ fn test_lock_wrapper_load_with_config() {
         ]
         .concat(),
     );
+    let inner_witness = (0..32).rev().collect::<Vec<_>>();
 
     let tx = TransactionBuilder::default()
         .cell_dep(cell_dep)
-        .cell_dep(CellDep::new_builder().out_point(as_out_point).build())
+        .cell_dep(CellDep::new_builder().out_point(dsb_out_point).build())
         .input(input)
         .outputs(outputs)
         .outputs_data(outputs_data.pack())
         .witness(witness.pack())
+        .witness(inner_witness.pack())
         .build();
     let tx = context.complete_tx(tx);
 

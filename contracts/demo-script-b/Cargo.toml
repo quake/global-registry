@@ -1,5 +1,5 @@
 [package]
-name = "global-registry"
+name = "demo-script-b"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,4 +7,3 @@ edition = "2021"
 
 [dependencies]
 ckb-std = { git = "https://github.com/nervosnetwork/ckb-std", branch = "master"}
-blake2b-rs = "0.2"

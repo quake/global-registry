@@ -14,8 +14,9 @@ use ckb_std::{
         packed::{Script, ScriptReader},
         prelude::*,
     },
+    debug,
     high_level::{
-        exec_cell_with_args, load_cell, load_cell_data, load_cell_lock, load_cell_type_hash,
+        encode_hex, exec_cell, load_cell, load_cell_data, load_cell_lock, load_cell_type_hash,
         load_script, load_witness, QueryIter,
     },
 };
@@ -137,19 +138,28 @@ fn validate_config_value(current_script: &Script) -> Result<(), Error> {
 
 fn exec_wrapped_script_inner(wrapped_script_hash: [u8; 32]) -> Result<(), Error> {
     let witness = load_witness(0, Source::GroupInput)?;
-    let (script, _witness_index) = parse_witness(&witness)?;
-    let script_hash = calc_script_hash(&script);
+    let (wrapped_script, wrapped_script_witness_index) = parse_witness(&witness)?;
+    let script_hash = calc_script_hash(&wrapped_script);
     if script_hash != wrapped_script_hash {
         return Err(Error::InvalidWrappedScriptHash);
     }
 
-    let hash_type = if script.hash_type().as_slice() == &[1] {
+    let hash_type = if wrapped_script.hash_type().as_slice() == &[1] {
         ScriptHashType::Type
     } else {
         ScriptHashType::Data
     };
 
-    exec_cell_with_args(script.code_hash().as_slice(), hash_type, 0, 0, &witness)?;
+    let arg0 = encode_hex(&wrapped_script.args().raw_data().to_vec());
+    let arg1 = encode_hex(&wrapped_script_witness_index.to_le_bytes());
+    debug!("arg0: {:?}", arg0);
+    debug!("arg1: {:?}", arg1);
+
+    exec_cell(
+        wrapped_script.code_hash().as_slice(),
+        hash_type,
+        &[&arg0, &arg1],
+    )?;
     Ok(())
 }
 

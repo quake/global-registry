@@ -15,3 +15,11 @@ template_type = "Rust"
 [[contracts]]
 name = "lock-wrapper"
 template_type = "Rust"
+
+[[contracts]]
+name = "demo-script-a"
+template_type = "Rust"
+
+[[contracts]]
+name = "demo-script-b"
+template_type = "Rust"
